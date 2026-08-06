@@ -1,0 +1,7 @@
+ai_env/
+ai_env312/
+__pycache__/
+*.pyc
+.chroma_db/
+.chroma_db_twin/
+.chroma_db3/
