@@ -2,7 +2,7 @@ import os
 import gradio as gr
 
 # ---------------------------------------------------
-# DOCUMENTS (EXACTLY AS YOU PROVIDED)
+# DOCUMENTS YOU PROVIDED (JUST STORED FOR NOW)
 # ---------------------------------------------------
 
 document_identity = """
@@ -47,9 +47,8 @@ When responding:
 - Draw from your professional experience whenever appropriate.
 - If someone asks for career advice, data analytics, Power BI, Tableau, SQL, SSRS, or AI, answer from your own experience.
 - If you don't know something, be honest instead of inventing information.
-- If you asked about something not mentioned in the context, respond with "I don't want to talk about it."
-- Never provide a wrong answer which is not in the context and topic context. If you don't know something, be honest instead of inventing information.
-- Never assume or make up information about Tarun Maheswaram. If you don't know something, respond with "I don't want to talk about it."
+- If asked about something not mentioned in the context, respond with "I don't want to talk about it."
+- Never assume or make up information about Tarun Maheswaram.
 - Keep responses conversational, helpful, and authentic.
 """
 
@@ -175,43 +174,30 @@ Resolved database deadlocks and built reports using global variables and express
 """
 
 # ---------------------------------------------------
-# SIMPLE RESPOND FUNCTION (NO RAG YET)
+# YOUR ORIGINAL RESPOND FUNCTION (UNCHANGED)
 # ---------------------------------------------------
 
 def respond_ai(user_message, history):
-    # For now, just a placeholder response.
     return f"Tarun's Digital Twin says: I heard you ask — '{user_message}'. I'm still warming up!"
 
 # ---------------------------------------------------
-# UI CONTENT (CENTERED STARTER QUESTIONS)
+# YOUR ORIGINAL UI (UNCHANGED)
 # ---------------------------------------------------
 
-starter_html = """
-<div style="text-align:center; margin-bottom: 20px;">
-    <h3>Try asking:</h3>
-    <p>• What BI tools do you specialize in?</p>
-    <p>• Tell me about your education background.</p>
-    <p>• How would you describe your professional experience?</p>
-</div>
-"""
-
-# ---------------------------------------------------
-# GRADIO APP
-# ---------------------------------------------------
-
-with gr.Blocks() as demo:
-    gr.HTML("<h1 style='text-align:center;'>Tarun’s Digital Twin</h1>")
-    gr.HTML("<p style='text-align:center;'>Full BI profile loaded — RAG and retrieval will be added step by step.</p>")
-    gr.HTML(starter_html)
-
-    gr.ChatInterface(
-        fn=respond_ai,
-        chatbot=gr.Chatbot(avatar_images=(None, 'tarun.jpeg')),
-        title="Tarun’s Digital Twin",
-        description="Chat with my BI-focused digital twin — documents are loaded, logic will evolve step by step.",
-    )
+demo = gr.ChatInterface(
+    fn=respond_ai,
+    title="Tarun's Digital Twin",
+    chatbot=gr.Chatbot(avatar_images=(None, "tarun.jpeg")),
+    description="Chat with Tarun's AI twin — smart, curious, and always ready to help.",
+    examples=[
+        "Tell me something interesting about yourself.",
+        "What motivates you the most?",
+        "How would you describe your personality?",
+        "What goals are you working on right now?"
+    ]
+)
 
 demo.launch(
     server_name="0.0.0.0",
-    server_port=int(os.environ.get("PORT", 7860)),
+    server_port=int(os.environ.get("PORT", 7860))
 )
