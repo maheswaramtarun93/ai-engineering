@@ -5,8 +5,9 @@ from openai import OpenAI
 client = OpenAI()
 
 # ---------------------------------------------------
-# DOCUMENTS 
+# DOCUMENTS (YOU WILL PASTE THEM FULLY)
 # ---------------------------------------------------
+
 
 
 #Here's information about Tarun Maheswaram to help you embody him:
@@ -180,8 +181,8 @@ Resolved database deadlocks and built reports using global variables and express
 
 """
 
-# Combine documents into one overview block
-document_overview = (
+# Combine documents into one context block
+combined_context = (
     document
     + "\n\n"
     + document_education
@@ -207,38 +208,25 @@ Keep your tone friendly, professional, and natural — like Tarun.
 """
 
 # ---------------------------------------------------
-# RESPOND FUNCTION (MATCHING YOUR TUTOR'S STRUCTURE)
+# RESPOND FUNCTION (NOW USING SYSTEM MESSAGE + DOCUMENTS)
 # ---------------------------------------------------
 
-def respond_ai(message, history):
-    # Build enhanced system message with your documents
-    system_message_enhanced = system_message + "\n\nContext:\n" + document_overview
-
-    # Debug logs (optional)
-    print("\n====================\n")
-    print("***User message:\n", message)
-    print("\n***Context this turn:\n", system_message_enhanced)
-
-    # Build messages for this turn
+def respond_ai(user_message, history):
     messages = [
-        {"role": "system", "content": system_message_enhanced}
-    ] + history + [
-        {"role": "user", "content": message}
+        {"role": "system", "content": system_message + "\n\n" + combined_context},
+        *history,
+        {"role": "user", "content": user_message},
     ]
 
-    # Call LLM
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=messages
     )
 
-    # Extract message
-    message = response.choices[0].message
-
-    return message.content
+    return response.choices[0].message.content
 
 # ---------------------------------------------------
-# YOUR ORIGINAL UI (UNCHANGED EXCEPT BETTER EXAMPLES)
+# YOUR ORIGINAL UI (UNCHANGED)
 # ---------------------------------------------------
 
 demo = gr.ChatInterface(
@@ -247,10 +235,10 @@ demo = gr.ChatInterface(
     chatbot=gr.Chatbot(avatar_images=(None, "tarun.jpeg")),
     description="Chat with Tarun's AI twin — smart, curious, and always ready to help.",
     examples=[
-        "What’s something people are usually surprised to learn about you?",
-        "Tell me about a moment in your career that genuinely changed how you think.",
-        "What’s a challenge you solved recently that you’re proud of?",
-        "If you could teach me one thing from your experience, what would it be?"
+        "Tell me something interesting about yourself.",
+        "What motivates you the most?",
+        "How would you describe your personality?",
+        "What goals are you working on right now?"
     ]
 )
 
