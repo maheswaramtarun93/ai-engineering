@@ -1,0 +1,6 @@
+gradio
+openai
+chromadb
+python-dotenv
+numpy
+scikit-learn

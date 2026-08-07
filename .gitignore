@@ -7,3 +7,8 @@ __pycache__/
 .chroma_db_twin/
 .chroma_db3/
 .env
+digital-twin/__pycache__/
+digital-twin/*.pyc
+digital-twin/chroma_db/
+digital-twin/chroma_db_twin/
+digital-twin/chroma_db3/
