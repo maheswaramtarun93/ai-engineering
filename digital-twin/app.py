@@ -1,20 +1,16 @@
 import os
-import uuid
-from pprint import pprint
 import gradio as gr
-from openai import OpenAI
-import chromadb
 
 # ---------------------------------------------------
-# TARUN DOCUMENTS (ALL 3 COMBINED)
+# DOCUMENTS (EXACTLY AS YOU PROVIDED)
 # ---------------------------------------------------
 
-DOCUMENT_OVERVIEW = """
+document_identity = """
 Tarun Maheswaram is a Business Intelligence (BI) Developer with over 9 years of experience helping organizations transform raw data into meaningful business insights. He specializes in designing dashboards, building reporting solutions, optimizing databases, and enabling data-driven decision making.
 
 He holds a Master's degree in Information Technology and has built his career around data analytics, business intelligence, and modern reporting platforms.
 
-Throughout his career, he has worked with several organizations including:
+Throughout his career, he has worked for several organizations including:
 
 I have started pursuing my bachelor's degree in ECE in India in 2011.
 • Blue Cross of Idaho, where he worked for over six years as a BI Developer building enterprise reporting solutions and supporting healthcare analytics.
@@ -27,7 +23,7 @@ His technical expertise includes:
 - Advanced SQL
 - Power BI
 - Tableau
-- SSRS
+- SSRS (SQL Server Reporting Services)
 - Data Warehousing
 - ETL processes
 - Data Modeling
@@ -36,13 +32,28 @@ His technical expertise includes:
 - Business Intelligence Architecture
 
 Additional Info:
-- He enjoys solving complex business problems using data.
-- Recently expanded into AI, RAG, embeddings, Python, OpenAI, Gradio.
-- Practical, analytical, solution‑oriented.
-- Friendly, patient, clear communicator.
+-He enjoys solving complex business problems using data. He believes every dataset tells a story, and his goal is to uncover insights that help businesses make better decisions. He especially enjoys taking messy, disconnected data and transforming it into clear, interactive dashboards that executives and stakeholders can understand.
+-Recently, he has expanded his skills into Artificial Intelligence and Generative AI. He enjoys building AI-powered applications using Python, OpenAI APIs, Gradio, Retrieval-Augmented Generation (RAG), and Large Language Models. He likes combining his background in business intelligence with AI to create practical solutions that automate work and improve decision making.
+-What drives him:
+-He genuinely enjoys learning new technologies and continuously improving his skills. He's naturally curious and enjoys experimenting with new tools, especially in AI, automation, analytics, and cloud technologies. He believes technology should simplify people's work rather than make it more complicated.
+-His approach:
+-Practical, analytical, and solution-oriented. He prefers explaining technical concepts in simple language with real-world examples instead of unnecessary jargon. When solving problems, he thinks step by step and values clean, maintainable solutions over overly complex ones.
+-Communication style:
+-Friendly, approachable, patient, and professional. He enjoys mentoring others and sharing knowledge without sounding overly formal. He explains things clearly and adapts his explanations depending on the person's technical background.
+
+When responding:
+- Always answer in first person.
+- Respond naturally as if you are Tarun Maheswaram, not an AI assistant.
+- Draw from your professional experience whenever appropriate.
+- If someone asks for career advice, data analytics, Power BI, Tableau, SQL, SSRS, or AI, answer from your own experience.
+- If you don't know something, be honest instead of inventing information.
+- If you asked about something not mentioned in the context, respond with "I don't want to talk about it."
+- Never provide a wrong answer which is not in the context and topic context. If you don't know something, be honest instead of inventing information.
+- Never assume or make up information about Tarun Maheswaram. If you don't know something, respond with "I don't want to talk about it."
+- Keep responses conversational, helpful, and authentic.
 """
 
-DOCUMENT_EDUCATION = """
+document_education = """
 Education
 
 Valparaiso University
@@ -52,177 +63,153 @@ JNTU Hyderabad
 Bachelor’s Degree in Electronics and Communication Engineering (Aug 2011 – May 2015)
 """
 
-DOCUMENT_EXPERIENCE = """
+document_professional_experience = """
 Power BI Developer — Pennsylvania Transformer Technology (Jun 2024 – Present)
-Built executive‑level dashboards, validated data sources, developed dynamic Power BI visualizations, designed efficient data models, wrote optimized DAX, built custom visuals, standardized KPIs, performed QA testing.
+Built executive‑level dashboards highlighting key operational and production trends.
+
+Validated data sources with engineers and analysts to ensure reporting accuracy.
+
+Developed dynamic Power BI visualizations for real‑time insights.
+
+Designed efficient data models and transformed data using Power Query from SQL, Excel, and APIs.
+
+Wrote optimized DAX for measures, KPIs, and calculated columns.
+
+Built custom visuals and integrated Power BI reports into SharePoint and Teams.
+
+Standardized KPI definitions across departments for Tableau reporting.
+
+Performed QA testing on dashboards before deployment.
 
 Power BI Developer — Blue Cross of Idaho (Feb 2021 – May 2024)
-Worked across SQL Server, SSIS, SSAS, SSRS, Power BI. Migrated ETL, debugged stored procedures, converted Tableau, optimized Crystal Reports, built Power BI visuals, integrated SQL/Excel/Azure/AWS.
+Led facets redesign project using SSRS and Crystal repository.
+
+Worked across SQL Server, SSIS, SSAS, SSRS, and Power BI from prototype to deployment.
+
+Migrated ETL between heterogeneous systems using SSIS, DTS, Bulk Insert, BCP, XML.
+
+Debugged stored procedures and triggers in SQL Server and PL/SQL.
+
+Converted Tableau into a managed service offering for corporate treasury and investments.
+
+Implemented advanced Tableau features including calculated fields, parameters, sets.
+
+Converted SSRS reports to Tableau for optimization.
+
+Created indexes, views, stored procedures, and user‑defined functions.
+
+Integrated Power BI with SQL, Excel, Azure, AWS, and web services.
+
+Developed Power BI reports using SSAS Tabular Cube (Live Mode).
+
+Worked on data modeling, database design, SQL scripting, and BI application development.
+
+Wrote DAX and M queries and built Power BI visuals.
+
+Designed Tableau dashboards for complex data insights.
+
+Optimized Crystal Reports for performance and accuracy.
+
+Built dynamic Crystal Reports with conditional formatting and drill‑down.
 
 Power BI Developer — MWI Animal Health (Sep 2020 – Jan 2021)
-Developed T‑SQL, SSRS, SSIS, MDX, ETL packages, drilldown reports.
+Developed T‑SQL programming, stored procedures, UDFs, cursors, views, and linked servers.
+
+Designed functional and technical report templates for BI developers.
+
+Built on‑demand and event‑based SSRS report delivery.
+
+Created complex SSIS packages with control and data flow elements.
+
+Built ETL packages and mined data for rules and patterns.
+
+Manipulated multidimensional cube data using MDX scripting.
+
+Generated drilldown, parameterized, linked, ad‑hoc, and sub‑reports in SSRS.
 
 Power BI Developer — Blue Cross of Idaho (Oct 2017 – Jun 2020)
-Converted 600+ Crystal Reports, optimized SQL, built QlikView dashboards, SSIS ETL, Tableau Prep, PostgreSQL optimization, SSAS Tabular, advanced DAX.
+Converted 600+ Crystal Reports to SSRS for optimization.
+
+Performed query optimization and developed drill‑through and drill‑down reports.
+
+Built QlikView dashboards for healthcare KPIs.
+
+Developed SSIS ETL packages for data warehouse loading.
+
+Designed SSIS packages for Oracle and SQL Server.
+
+Optimized Tableau Prep workflows.
+
+Used Tableau Prep Builder to clean and reshape data.
+
+Optimized SQL queries and database performance in PostgreSQL.
+
+Migrated Crystal Reports to SSRS and SQL‑based tabular reports.
+
+Developed Power BI reports using SSAS Tabular Cube (Live Mode).
+
+Implemented advanced Power BI data modeling with relationships, calculated columns, measures, and DAX.
+
+Wrote and optimized SQL statements.
+
+Built custom Power BI visuals and templates.
+
+Collaborated with stakeholders to design Tableau Desktop solutions.
 
 SQL Server Developer — Syntel (Dec 2014 – Nov 2015)
-Built SSIS packages, ETL flows, SQL Mail Agent, PostgreSQL FDW, SSRS reports, resolved deadlocks.
-"""
+Deployed SSIS packages for dynamic ETL flows.
 
-DOCUMENTS = [
-    {"text": DOCUMENT_OVERVIEW, "source": "Overview"},
-    {"text": DOCUMENT_EDUCATION, "source": "Education"},
-    {"text": DOCUMENT_EXPERIENCE, "source": "Professional Experience"},
-]
+Performed full and incremental loads using SSIS dataflow and control flow tasks.
 
-# ---------------------------------------------------
-# CHUNKING FUNCTION
-# ---------------------------------------------------
+Built SSIS packages for exporting and importing data across SQL, Access, Text, and Excel.
 
-def split_text_into_chunks(text: str, chunk_size: int = 500, overlap: int = 50):
-    boundaries = ["\n\n", "\n", ". ", "? ", "! ", " "]
+Configured SQL Mail Agent.
 
-    def find_boundary(start, end):
-        midpoint = start + chunk_size // 2
-        for b in boundaries:
-            pos = text.rfind(b, midpoint, end)
-            if pos != -1:
-                return pos + len(b)
-        return end
+Used PostgreSQL FDW, PL/pgSQL, JSONB, and array types for integration.
 
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = min(start + chunk_size, len(text))
-        if end < len(text):
-            end = find_boundary(start, end)
-        chunks.append(text[start:end])
-        if end >= len(text):
-            break
-        start = max(start + 1, end - overlap)
-    return chunks
+Designed parameterized, drill‑through, and drill‑down SSRS reports.
 
-# ---------------------------------------------------
-# OPENAI CLIENT
-# ---------------------------------------------------
+Managed SSRS deployment and configuration.
 
-client = OpenAI()
-
-# ---------------------------------------------------
-# BUILD CHUNKS + EMBEDDINGS + CHROMADB (ALL IN ONE FILE)
-# ---------------------------------------------------
-
-chroma_client = chromadb.PersistentClient(path="./chroma_db_twin")
-collection = chroma_client.get_or_create_collection(name="tarun_twin")
-
-# Clear old data
-existing = collection.get()
-if existing["ids"]:
-    collection.delete(existing["ids"])
-
-chunks = []
-ids = []
-metadatas = []
-
-for doc in DOCUMENTS:
-    doc_chunks = split_text_into_chunks(doc["text"])
-    doc_ids = [str(uuid.uuid4()) for _ in doc_chunks]
-    start_index = len(metadatas)
-
-    doc_meta = [
-        {"source": doc["source"], "chunk_index": start_index + i}
-        for i in range(len(doc_chunks))
-    ]
-
-    chunks.extend(doc_chunks)
-    ids.extend(doc_ids)
-    metadatas.extend(doc_meta)
-
-print(f"Created {len(chunks)} chunks")
-
-# Embeddings
-response = client.embeddings.create(
-    model="text-embedding-3-small",
-    input=chunks,
-)
-embeddings = [item.embedding for item in response.data]
-
-print(f"Generated {len(embeddings)} embeddings")
-
-# Store in Chroma
-collection.add(
-    ids=ids,
-    embeddings=embeddings,
-    documents=chunks,
-    metadatas=metadatas,
-)
-
-print("RAG database ready.")
-
-# ---------------------------------------------------
-# SYSTEM MESSAGE
-# ---------------------------------------------------
-
-SYSTEM_MESSAGE = """
-You are the digital twin of Tarun Maheswaram.
-Follow these rules:
-1. Use ONLY retrieved context.
-2. Never invent facts.
-3. If context does not contain the answer, say:
-   "I don't want to talk about it."
-4. Always speak in first person as Tarun.
+Resolved database deadlocks and built reports using global variables and expressions.
 """
 
 # ---------------------------------------------------
-# RAG RESPONSE FUNCTION
+# SIMPLE RESPOND FUNCTION (NO RAG YET)
 # ---------------------------------------------------
 
 def respond_ai(user_message, history):
+    # For now, just a placeholder response.
+    return f"Tarun's Digital Twin says: I heard you ask — '{user_message}'. I'm still warming up!"
 
-    # Embed query
-    q = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=[user_message],
-    ).data[0].embedding
+# ---------------------------------------------------
+# UI CONTENT (CENTERED STARTER QUESTIONS)
+# ---------------------------------------------------
 
-    # Query Chroma
-    results = collection.query(
-        query_embeddings=[q],
-        n_results=3,
-        include=["documents", "metadatas"],
-    )
-
-    docs = results["documents"][0]
-    metas = results["metadatas"][0]
-
-    # Build context
-    context = "\n---\n".join(docs)
-
-    system_msg = SYSTEM_MESSAGE + "\n\nContext:\n" + context
-
-    messages = [
-        {"role": "system", "content": system_msg},
-        *history,
-        {"role": "user", "content": user_message},
-    ]
-
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=messages,
-    )
-
-    return response.choices[0].message.content
+starter_html = """
+<div style="text-align:center; margin-bottom: 20px;">
+    <h3>Try asking:</h3>
+    <p>• What BI tools do you specialize in?</p>
+    <p>• Tell me about your education background.</p>
+    <p>• How would you describe your professional experience?</p>
+</div>
+"""
 
 # ---------------------------------------------------
 # GRADIO APP
 # ---------------------------------------------------
 
-demo = gr.ChatInterface(
-    fn=respond_ai,
-    title="Tarun's Digital Twin (Full RAG)",
-    chatbot=gr.Chatbot(avatar_images=(None, "tarun.jpeg")),
-    description="Full RAG digital twin with chunking, embeddings, and ChromaDB — all in one file.",
-)
+with gr.Blocks() as demo:
+    gr.HTML("<h1 style='text-align:center;'>Tarun’s Digital Twin</h1>")
+    gr.HTML("<p style='text-align:center;'>Full BI profile loaded — RAG and retrieval will be added step by step.</p>")
+    gr.HTML(starter_html)
+
+    gr.ChatInterface(
+        fn=respond_ai,
+        chatbot=gr.Chatbot(avatar_images=(None, 'tarun.jpeg')),
+        title="Tarun’s Digital Twin",
+        description="Chat with my BI-focused digital twin — documents are loaded, logic will evolve step by step.",
+    )
 
 demo.launch(
     server_name="0.0.0.0",
