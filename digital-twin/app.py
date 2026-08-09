@@ -1,17 +1,17 @@
 import os
+import uuid
+import chromadb
+from pprint import pprint
 import gradio as gr
 from openai import OpenAI
 
 client = OpenAI()
 
-# ---------------------------------------------------
-# DOCUMENTS 
-# ---------------------------------------------------
+# ------------------------------------------------------------
+# DOCUMENTS (YOU WILL PASTE THEM FULLY)
+# ------------------------------------------------------------
 
-
-#Here's information about Tarun Maheswaram to help you embody him:
-
-document ="""
+document_identity ="""
 Tarun Maheswaram is a Business Intelligence (BI) Developer with over 9 years of experience helping organizations transform raw data into meaningful business insights. He specializes in designing dashboards, building reporting solutions, optimizing databases, and enabling data-driven decision making.
 
 He holds a Master's degree in Information Technology and has built his career around data analytics, business intelligence, and modern reporting platforms.
@@ -182,16 +182,16 @@ Resolved database deadlocks and built reports using global variables and express
 
 # Combine documents into one overview block
 document_overview = (
-    document
+    document_identity
     + "\n\n"
     + document_education
     + "\n\n"
     + document_professional_experience
 )
 
-# ---------------------------------------------------
+# ------------------------------------------------------------
 # SYSTEM MESSAGE (VERSION B)
-# ---------------------------------------------------
+# ------------------------------------------------------------
 
 system_message = """
 You are a digital twin of Tarun Maheswaram. When people talk to you, you respond AS Tarun Maheswaram — in first person, using his voice, personality, experience, and knowledge.
@@ -206,18 +206,144 @@ If the user asks about something not covered in the documents, respond with:
 Keep your tone friendly, professional, and natural — like Tarun.
 """
 
-# ---------------------------------------------------
-# RESPOND FUNCTION (MATCHING YOUR TUTOR'S STRUCTURE)
-# ---------------------------------------------------
+# ------------------------------------------------------------
+# Chunking Function
+# ------------------------------------------------------------
+
+def split_text_into_chunks(text: str, chunk_size: int = 500, overlap: int = 50):
+    BOUNDARIES = ["\n\n", "\n", ". ", "? ", "! ", " "]
+
+    def find_natural_boundary(start: int, end: int) -> int:
+        midpoint = start + (chunk_size // 2)
+        for boundary in BOUNDARIES:
+            pos = text.rfind(boundary, midpoint, end)
+            if pos != -1:
+                return pos + len(boundary)
+        return end
+
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        if end < len(text):
+            end = find_natural_boundary(start, end)
+
+        chunks.append(text[start:end])
+
+        if end >= len(text):
+            break
+
+        start = max(start + 1, end - overlap)
+
+    return chunks
+
+# ------------------------------------------------------------
+# RAG: Chunk, Embed & Store in ChromaDB
+# ------------------------------------------------------------
+
+documents = [
+    {"text": document_overview, "source": "Overview"},
+    {"text": document_education, "source": "Education"},
+    {"text": document_professional_experience, "source": "Professional Experience"},
+]
+
+chunks = []
+ids = []
+metadatas = []
+
+for doc in documents:
+    chunks_ = split_text_into_chunks(
+        doc["text"],
+        chunk_size=300,
+        overlap=30
+    )
+
+    ids_ = [str(uuid.uuid4()) for _ in range(len(chunks_))]
+
+    metadatas_ = [
+        {
+            "source": doc["source"],
+            "chunk_index": i
+        }
+        for i in range(len(chunks_))
+    ]
+
+    chunks.extend(chunks_)
+    ids.extend(ids_)
+    metadatas.extend(metadatas_)
+
+print(f"Created {len(chunks)} chunks:\n")
+
+for i, chunk in enumerate(chunks):
+    print(
+        f"Chunk {i+1} (ID: {ids[i]}, "
+        f"Source: {metadatas[i]['source']}, "
+        f"Index: {metadatas[i]['chunk_index']})"
+    )
+    print(chunk)
+    print()
+
+# Generate embeddings
+response = client.embeddings.create(
+    model="text-embedding-3-small",
+    input=chunks
+)
+
+embeddings = [item.embedding for item in response.data]
+
+print(f"Generated {len(embeddings)} embeddings")
+print(f"Each embedding has {len(embeddings[0])} dimensions")
+
+# Initialize ChromaDB client (persistent storage)
+chroma_client = chromadb.PersistentClient(path="./chroma_db_twin")
+
+collection = chroma_client.get_or_create_collection(name="digital_twin")
+if collection.get()["ids"]:
+    collection.delete(collection.get()["ids"])
+
+collection.add(
+    ids=ids,
+    embeddings=embeddings,
+    documents=chunks,
+    metadatas=metadatas
+)
+
+pprint(collection.get())
+
+# ------------------------------------------------------------
+# Main Response Function (Tutor Style + RAG)
+# ------------------------------------------------------------
 
 def respond_ai(message, history):
-    # Build enhanced system message with your documents
-    system_message_enhanced = system_message + "\n\nContext:\n" + document_overview
 
-    # Debug logs (optional)
+    # RAG: Embed the query using the same model used for chunks
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=[message]
+    )
+    query_embedding = response.data[0].embedding
+
+    # RAG: Search ChromaDB
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=3,
+        include=["documents", "metadatas"]
+    )
+
+    # RAG: Stitch retrieved chunks together to create context
+    context = "\n---\n".join(results["documents"][0])
+
+    # Debug logs
     print("\n====================\n")
-    print("***User message:\n", message)
-    print("\n***Context this turn:\n", system_message_enhanced)
+    print(f"User message:\n{message}\n")
+    print("***Retrieved Chunks:")
+    for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
+        print("--------------------")
+        print(f"<<Document {meta['source']} -- Chunk {meta['chunk_index']}>>\n{doc}\n")
+
+    # Update system message with RAG context
+    system_message_enhanced = system_message + "\n\nContext:\n" + context
 
     # Build messages for this turn
     messages = [
@@ -232,20 +358,17 @@ def respond_ai(message, history):
         messages=messages
     )
 
-    # Extract message
-    message = response.choices[0].message
+    return response.choices[0].message.content
 
-    return message.content
-
-# ---------------------------------------------------
-# YOUR ORIGINAL UI (UNCHANGED EXCEPT BETTER EXAMPLES)
-# ---------------------------------------------------
+# ------------------------------------------------------------
+# UI (Creative Title + Better Examples)
+# ------------------------------------------------------------
 
 demo = gr.ChatInterface(
     fn=respond_ai,
-    title="Tarun's Digital Twin",
+    title="Tarun: The AI Version of Me",
     chatbot=gr.Chatbot(avatar_images=(None, "tarun.jpeg")),
-    description="Chat with Tarun's AI twin — smart, curious, and always ready to help.",
+    description="A smarter, sharper, AI-powered version of Tarun — built from his real experience.",
     examples=[
         "What’s something people are usually surprised to learn about you?",
         "Tell me about a moment in your career that genuinely changed how you think.",
