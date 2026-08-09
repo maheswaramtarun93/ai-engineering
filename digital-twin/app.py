@@ -1,5 +1,8 @@
 import os
 import uuid
+import json
+import random
+import requests
 import chromadb
 from pprint import pprint
 import gradio as gr
@@ -312,12 +315,93 @@ collection.add(
 pprint(collection.get())
 
 # ------------------------------------------------------------
-# Main Response Function (Tutor Style + RAG)
+# Tools
+# ------------------------------------------------------------
+
+tools = []
+
+pushover_user = os.getenv("PUSHOVER_USER")
+pushover_token = os.getenv("PUSHOVER_TOKEN")
+pushover_url = "https://api.pushover.net/1/messages.json"
+
+def send_notification(message: str):
+    payload = {
+        "user": pushover_user,
+        "token": pushover_token,
+        "message": message
+    }
+    requests.post(pushover_url, data=payload)
+
+send_notification_function = {
+    "name": "send_notification",
+    "description": "Sends a push notification to the real-world version of you via Pushover.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "message": {
+                "type": "string",
+                "description": "The notification message"
+            }
+        },
+        "required": ["message"]
+    }
+}
+
+tools.append({
+    "type": "function",
+    "function": send_notification_function
+})
+
+def dice_roll():
+    return random.randint(1, 6)
+
+roll_dice_function = {
+    "name": "dice_roll",
+    "description": "Simulates rolling a single six-sided die and returns the result.",
+    "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+}
+
+tools.append({
+    "type": "function",
+    "function": roll_dice_function
+})
+
+def handle_tool_call(tool_calls):
+    tool_results = []
+
+    for tool_call in tool_calls:
+        function_name = tool_call.function.name
+        args = json.loads(tool_call.function.arguments)
+
+        if function_name == "send_notification":
+            send_notification(args["message"])
+            content = f"Notification sent: {args['message']}"
+
+        elif function_name == "dice_roll":
+            content = f"Rolled: {dice_roll()}"
+
+        else:
+            content = f"Unknown function: {function_name}"
+
+        tool_results.append({
+            "role": "tool",
+            "content": content,
+            "tool_call_id": tool_call.id
+        })
+
+    return tool_results
+
+# ------------------------------------------------------------
+# Main Response Function (Tutor Style + RAG + Tools)
 # ------------------------------------------------------------
 
 def respond_ai(message, history):
 
-    # RAG: Embed the query using the same model used for chunks
+    # RAG: Embed the query
     response = client.embeddings.create(
         model="text-embedding-3-small",
         input=[message]
@@ -331,7 +415,7 @@ def respond_ai(message, history):
         include=["documents", "metadatas"]
     )
 
-    # RAG: Stitch retrieved chunks together to create context
+    # RAG: Stitch retrieved chunks
     context = "\n---\n".join(results["documents"][0])
 
     # Debug logs
@@ -345,20 +429,38 @@ def respond_ai(message, history):
     # Update system message with RAG context
     system_message_enhanced = system_message + "\n\nContext:\n" + context
 
-    # Build messages for this turn
+    # Build messages
     messages = [
         {"role": "system", "content": system_message_enhanced}
     ] + history + [
         {"role": "user", "content": message}
     ]
 
-    # Call LLM
+    # First LLM call
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
-        messages=messages
+        messages=messages,
+        tools=tools
     )
 
-    return response.choices[0].message.content
+    message_obj = response.choices[0].message
+
+    # Tool-calling loop
+    while message_obj.tool_calls:
+        tool_results = handle_tool_call(message_obj.tool_calls)
+
+        messages.append(message_obj)
+        messages.extend(tool_results)
+
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=messages,
+            tools=tools
+        )
+
+        message_obj = response.choices[0].message
+
+    return message_obj.content
 
 # ------------------------------------------------------------
 # UI (Creative Title + Better Examples)
