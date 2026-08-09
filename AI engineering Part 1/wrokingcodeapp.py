@@ -1,18 +1,20 @@
 import os
+import uuid
+import json
+import random
+import requests
+import chromadb
+from pprint import pprint
 import gradio as gr
 from openai import OpenAI
 
 client = OpenAI()
 
-# ---------------------------------------------------
+# ------------------------------------------------------------
 # DOCUMENTS (YOU WILL PASTE THEM FULLY)
-# ---------------------------------------------------
+# ------------------------------------------------------------
 
-
-
-#Here's information about Tarun Maheswaram to help you embody him:
-
-document ="""
+document_identity ="""
 Tarun Maheswaram is a Business Intelligence (BI) Developer with over 9 years of experience helping organizations transform raw data into meaningful business insights. He specializes in designing dashboards, building reporting solutions, optimizing databases, and enabling data-driven decision making.
 
 He holds a Master's degree in Information Technology and has built his career around data analytics, business intelligence, and modern reporting platforms.
@@ -181,18 +183,18 @@ Resolved database deadlocks and built reports using global variables and express
 
 """
 
-# Combine documents into one context block
-combined_context = (
-    document
+# Combine documents into one overview block
+document_overview = (
+    document_identity
     + "\n\n"
     + document_education
     + "\n\n"
     + document_professional_experience
 )
 
-# ---------------------------------------------------
+# ------------------------------------------------------------
 # SYSTEM MESSAGE (VERSION B)
-# ---------------------------------------------------
+# ------------------------------------------------------------
 
 system_message = """
 You are a digital twin of Tarun Maheswaram. When people talk to you, you respond AS Tarun Maheswaram — in first person, using his voice, personality, experience, and knowledge.
@@ -207,38 +209,273 @@ If the user asks about something not covered in the documents, respond with:
 Keep your tone friendly, professional, and natural — like Tarun.
 """
 
-# ---------------------------------------------------
-# RESPOND FUNCTION (NOW USING SYSTEM MESSAGE + DOCUMENTS)
-# ---------------------------------------------------
+# ------------------------------------------------------------
+# Chunking Function
+# ------------------------------------------------------------
 
-def respond_ai(user_message, history):
-    messages = [
-        {"role": "system", "content": system_message + "\n\n" + combined_context},
-        *history,
-        {"role": "user", "content": user_message},
-    ]
+def split_text_into_chunks(text: str, chunk_size: int = 500, overlap: int = 50):
+    BOUNDARIES = ["\n\n", "\n", ". ", "? ", "! ", " "]
 
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=messages
+    def find_natural_boundary(start: int, end: int) -> int:
+        midpoint = start + (chunk_size // 2)
+        for boundary in BOUNDARIES:
+            pos = text.rfind(boundary, midpoint, end)
+            if pos != -1:
+                return pos + len(boundary)
+        return end
+
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        if end < len(text):
+            end = find_natural_boundary(start, end)
+
+        chunks.append(text[start:end])
+
+        if end >= len(text):
+            break
+
+        start = max(start + 1, end - overlap)
+
+    return chunks
+
+# ------------------------------------------------------------
+# RAG: Chunk, Embed & Store in ChromaDB
+# ------------------------------------------------------------
+
+documents = [
+    {"text": document_overview, "source": "Overview"},
+    {"text": document_education, "source": "Education"},
+    {"text": document_professional_experience, "source": "Professional Experience"},
+]
+
+chunks = []
+ids = []
+metadatas = []
+
+for doc in documents:
+    chunks_ = split_text_into_chunks(
+        doc["text"],
+        chunk_size=300,
+        overlap=30
     )
 
-    return response.choices[0].message.content
+    ids_ = [str(uuid.uuid4()) for _ in range(len(chunks_))]
 
-# ---------------------------------------------------
-# YOUR ORIGINAL UI (UNCHANGED)
-# ---------------------------------------------------
+    metadatas_ = [
+        {
+            "source": doc["source"],
+            "chunk_index": i
+        }
+        for i in range(len(chunks_))
+    ]
+
+    chunks.extend(chunks_)
+    ids.extend(ids_)
+    metadatas.extend(metadatas_)
+
+print(f"Created {len(chunks)} chunks:\n")
+
+for i, chunk in enumerate(chunks):
+    print(
+        f"Chunk {i+1} (ID: {ids[i]}, "
+        f"Source: {metadatas[i]['source']}, "
+        f"Index: {metadatas[i]['chunk_index']})"
+    )
+    print(chunk)
+    print()
+
+# Generate embeddings
+response = client.embeddings.create(
+    model="text-embedding-3-small",
+    input=chunks
+)
+
+embeddings = [item.embedding for item in response.data]
+
+print(f"Generated {len(embeddings)} embeddings")
+print(f"Each embedding has {len(embeddings[0])} dimensions")
+
+# Initialize ChromaDB client (persistent storage)
+chroma_client = chromadb.PersistentClient(path="./chroma_db_twin")
+
+collection = chroma_client.get_or_create_collection(name="digital_twin")
+if collection.get()["ids"]:
+    collection.delete(collection.get()["ids"])
+
+collection.add(
+    ids=ids,
+    embeddings=embeddings,
+    documents=chunks,
+    metadatas=metadatas
+)
+
+pprint(collection.get())
+
+# ------------------------------------------------------------
+# Tools
+# ------------------------------------------------------------
+
+tools = []
+
+pushover_user = os.getenv("PUSHOVER_USER")
+pushover_token = os.getenv("PUSHOVER_TOKEN")
+pushover_url = "https://api.pushover.net/1/messages.json"
+
+def send_notification(message: str):
+    payload = {
+        "user": pushover_user,
+        "token": pushover_token,
+        "message": message
+    }
+    requests.post(pushover_url, data=payload)
+
+send_notification_function = {
+    "name": "send_notification",
+    "description": "Sends a push notification to the real-world version of you via Pushover.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "message": {
+                "type": "string",
+                "description": "The notification message"
+            }
+        },
+        "required": ["message"]
+    }
+}
+
+tools.append({
+    "type": "function",
+    "function": send_notification_function
+})
+
+def dice_roll():
+    return random.randint(1, 6)
+
+roll_dice_function = {
+    "name": "dice_roll",
+    "description": "Simulates rolling a single six-sided die and returns the result.",
+    "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+}
+
+tools.append({
+    "type": "function",
+    "function": roll_dice_function
+})
+
+def handle_tool_call(tool_calls):
+    tool_results = []
+
+    for tool_call in tool_calls:
+        function_name = tool_call.function.name
+        args = json.loads(tool_call.function.arguments)
+
+        if function_name == "send_notification":
+            send_notification(args["message"])
+            content = f"Notification sent: {args['message']}"
+
+        elif function_name == "dice_roll":
+            content = f"Rolled: {dice_roll()}"
+
+        else:
+            content = f"Unknown function: {function_name}"
+
+        tool_results.append({
+            "role": "tool",
+            "content": content,
+            "tool_call_id": tool_call.id
+        })
+
+    return tool_results
+
+# ------------------------------------------------------------
+# Main Response Function (Tutor Style + RAG + Tools)
+# ------------------------------------------------------------
+
+def respond_ai(message, history):
+
+    # RAG: Embed the query
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=[message]
+    )
+    query_embedding = response.data[0].embedding
+
+    # RAG: Search ChromaDB
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=3,
+        include=["documents", "metadatas"]
+    )
+
+    # RAG: Stitch retrieved chunks
+    context = "\n---\n".join(results["documents"][0])
+
+    # Debug logs
+    print("\n====================\n")
+    print(f"User message:\n{message}\n")
+    print("***Retrieved Chunks:")
+    for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
+        print("--------------------")
+        print(f"<<Document {meta['source']} -- Chunk {meta['chunk_index']}>>\n{doc}\n")
+
+    # Update system message with RAG context
+    system_message_enhanced = system_message + "\n\nContext:\n" + context
+
+    # Build messages
+    messages = [
+        {"role": "system", "content": system_message_enhanced}
+    ] + history + [
+        {"role": "user", "content": message}
+    ]
+
+    # First LLM call
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=messages,
+        tools=tools
+    )
+
+    message_obj = response.choices[0].message
+
+    # Tool-calling loop
+    while message_obj.tool_calls:
+        tool_results = handle_tool_call(message_obj.tool_calls)
+
+        messages.append(message_obj)
+        messages.extend(tool_results)
+
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=messages,
+            tools=tools
+        )
+
+        message_obj = response.choices[0].message
+
+    return message_obj.content
+
+# ------------------------------------------------------------
+# UI (Creative Title + Better Examples)
+# ------------------------------------------------------------
 
 demo = gr.ChatInterface(
     fn=respond_ai,
-    title="Tarun's Digital Twin",
+    title="Tarun: The AI Version of Me",
     chatbot=gr.Chatbot(avatar_images=(None, "tarun.jpeg")),
-    description="Chat with Tarun's AI twin — smart, curious, and always ready to help.",
+    description="A smarter, sharper, AI-powered version of Tarun — built from his real experience.",
     examples=[
-        "Tell me something interesting about yourself.",
-        "What motivates you the most?",
-        "How would you describe your personality?",
-        "What goals are you working on right now?"
+        "What’s something people are usually surprised to learn about you?",
+        "Tell me about a moment in your career that genuinely changed how you think.",
+        "What’s a challenge you solved recently that you’re proud of?",
+        "If you could teach me one thing from your experience, what would it be?"
     ]
 )
 

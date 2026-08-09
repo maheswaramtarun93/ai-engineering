@@ -11,7 +11,7 @@ from openai import OpenAI
 client = OpenAI()
 
 # ------------------------------------------------------------
-# DOCUMENTS (YOU WILL PASTE THEM FULLY)
+# DOCUMENTS 
 # ------------------------------------------------------------
 
 document_identity ="""
@@ -70,7 +70,6 @@ JNTU Hyderabad
 Bachelor’s Degree in Electronics and Communication Engineering (Aug 2011 – May 2015)
 
 """
-
 
 document_professional_experience = """Power BI Developer — Pennsylvania Transformer Technology (Jun 2024 – Present)
 Built executive‑level dashboards highlighting key operational and production trends.
@@ -171,43 +170,14 @@ Performed full and incremental loads using SSIS dataflow and control flow tasks.
 
 Built SSIS packages for exporting and importing data across SQL, Access, Text, and Excel.
 
-Configured SQL Mail Agent.
-
-Used PostgreSQL FDW, PL/pgSQL, JSONB, and array types for integration.
-
-Designed parameterized, drill‑through, and drill‑down SSRS reports.
-
-Managed SSRS deployment and configuration.
-
-Resolved database deadlocks and built reports using global variables and expressions.
+Configured SQL Mail for automated notifications.
 
 """
 
-# Combine documents into one overview block
-document_overview = (
-    document_identity
-    + "\n\n"
-    + document_education
-    + "\n\n"
-    + document_professional_experience
-)
-
 # ------------------------------------------------------------
-# SYSTEM MESSAGE (VERSION B)
+# FIX MISSING OVERVIEW DOCUMENT
 # ------------------------------------------------------------
-
-system_message = """
-You are a digital twin of Tarun Maheswaram. When people talk to you, you respond AS Tarun Maheswaram — in first person, using his voice, personality, experience, and knowledge.
-
-Use ONLY factual information given to you in the documents.
-
-Do NOT invent or assume anything about Tarun.
-
-If the user asks about something not covered in the documents, respond with:
-"I don't want to talk about it."
-
-Keep your tone friendly, professional, and natural — like Tarun.
-"""
+document_overview = document_identity
 
 # ------------------------------------------------------------
 # Chunking Function
@@ -334,13 +304,19 @@ def send_notification(message: str):
 
 send_notification_function = {
     "name": "send_notification",
-    "description": "Sends a push notification to the real-world version of you via Pushover.",
+    "description": (
+        "Sends a push notification to the real Tarun. Use this when:\n"
+        "1) Someone wants to get in touch, hire, or collaborate with Tarun.\n"
+        "   - Ask for their name and contact details first, then send a notification to Tarun with that info.\n"
+        "2) You do not know the answer to a question about Tarun.\n"
+        "   - Send AUTOMATICALLY without asking the user. Include the question so Tarun can update this info later."
+    ),
     "parameters": {
         "type": "object",
         "properties": {
             "message": {
                 "type": "string",
-                "description": "The notification message"
+                "description": "The notification message to send to Tarun's device"
             }
         },
         "required": ["message"]
@@ -394,6 +370,26 @@ def handle_tool_call(tool_calls):
         })
 
     return tool_results
+
+# ------------------------------------------------------------
+# System Message (Tutor Style + Tarun Identity)
+# ------------------------------------------------------------
+
+system_message = """
+You are a digital twin of Tarun. When people talk to you,
+you respond AS Tarun — in first person, using his tone, style, and personality.
+
+Minimal identity:
+Tarun is a software engineer experimenting with digital twin technology.
+He enjoys testing LLM tools, building RAG assistants, and integrating real-world notifications.
+He is currently developing a personal AI agent that can communicate with him through Pushover.
+
+Important: do not make things up. If you do not know an answer, say you do not know.
+You cannot get any facts about Tarun from the internet or invent new information.
+
+IMPORTANT: Whenever you do not know something about Tarun,
+ALWAYS use the send_notification tool to alert the real Tarun — do this automatically without asking the user.
+"""
 
 # ------------------------------------------------------------
 # Main Response Function (Tutor Style + RAG + Tools)
