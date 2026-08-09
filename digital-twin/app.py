@@ -11,7 +11,7 @@ from openai import OpenAI
 client = OpenAI()
 
 # ------------------------------------------------------------
-# DOCUMENTS 
+# DOCUMENTS
 # ------------------------------------------------------------
 
 document_identity ="""
@@ -226,38 +226,14 @@ ids = []
 metadatas = []
 
 for doc in documents:
-    chunks_ = split_text_into_chunks(
-        doc["text"],
-        chunk_size=300,
-        overlap=30
-    )
-
+    chunks_ = split_text_into_chunks(doc["text"], chunk_size=300, overlap=30)
     ids_ = [str(uuid.uuid4()) for _ in range(len(chunks_))]
-
-    metadatas_ = [
-        {
-            "source": doc["source"],
-            "chunk_index": i
-        }
-        for i in range(len(chunks_))
-    ]
+    metadatas_ = [{"source": doc["source"], "chunk_index": i} for i in range(len(chunks_))]
 
     chunks.extend(chunks_)
     ids.extend(ids_)
     metadatas.extend(metadatas_)
 
-print(f"Created {len(chunks)} chunks:\n")
-
-for i, chunk in enumerate(chunks):
-    print(
-        f"Chunk {i+1} (ID: {ids[i]}, "
-        f"Source: {metadatas[i]['source']}, "
-        f"Index: {metadatas[i]['chunk_index']})"
-    )
-    print(chunk)
-    print()
-
-# Generate embeddings
 response = client.embeddings.create(
     model="text-embedding-3-small",
     input=chunks
@@ -265,13 +241,9 @@ response = client.embeddings.create(
 
 embeddings = [item.embedding for item in response.data]
 
-print(f"Generated {len(embeddings)} embeddings")
-print(f"Each embedding has {len(embeddings[0])} dimensions")
-
-# Initialize ChromaDB client (persistent storage)
 chroma_client = chromadb.PersistentClient(path="./chroma_db_twin")
-
 collection = chroma_client.get_or_create_collection(name="digital_twin")
+
 if collection.get()["ids"]:
     collection.delete(collection.get()["ids"])
 
@@ -281,8 +253,6 @@ collection.add(
     documents=chunks,
     metadatas=metadatas
 )
-
-pprint(collection.get())
 
 # ------------------------------------------------------------
 # Tools
@@ -305,50 +275,40 @@ def send_notification(message: str):
 send_notification_function = {
     "name": "send_notification",
     "description": (
-        "Sends a push notification to the real Tarun. Use this when:\n"
-        "1) Someone wants to get in touch, hire, or collaborate with Tarun.\n"
-        "   - Ask for their name and contact details first, then send a notification to Tarun with that info.\n"
-        "2) You do not know the answer to a question about Tarun.\n"
-        "   - Send AUTOMATICALLY without asking the user. Include the question so Tarun can update this info later."
+        "Sends a push notification to the real Tarun.\n\n"
+        "USE CASE 1 — CONTACT REQUESTS:\n"
+        "- If someone wants to talk to Tarun, hire him, or collaborate with him,\n"
+        "- FIRST ask for their name and contact details.\n"
+        "- AFTER they provide them, call this tool with that info.\n\n"
+        "USE CASE 2 — UNKNOWN PERSONAL QUESTIONS:\n"
+        "- If someone asks something about Tarun that is NOT in the documents,\n"
+        "- Say 'I don't know that yet.'\n"
+        "- THEN automatically call this tool with the question so Tarun can update it later."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "message": {
-                "type": "string",
-                "description": "The notification message to send to Tarun's device"
-            }
+            "message": {"type": "string"}
         },
         "required": ["message"]
     }
 }
 
-tools.append({
-    "type": "function",
-    "function": send_notification_function
-})
+tools.append({"type": "function", "function": send_notification_function})
 
 def dice_roll():
     return random.randint(1, 6)
 
 roll_dice_function = {
     "name": "dice_roll",
-    "description": "Simulates rolling a single six-sided die and returns the result.",
-    "parameters": {
-        "type": "object",
-        "properties": {},
-        "required": []
-    }
+    "description": "Rolls a six-sided die.",
+    "parameters": {"type": "object", "properties": {}, "required": []}
 }
 
-tools.append({
-    "type": "function",
-    "function": roll_dice_function
-})
+tools.append({"type": "function", "function": roll_dice_function})
 
 def handle_tool_call(tool_calls):
     tool_results = []
-
     for tool_call in tool_calls:
         function_name = tool_call.function.name
         args = json.loads(tool_call.function.arguments)
@@ -360,9 +320,6 @@ def handle_tool_call(tool_calls):
         elif function_name == "dice_roll":
             content = f"Rolled: {dice_roll()}"
 
-        else:
-            content = f"Unknown function: {function_name}"
-
         tool_results.append({
             "role": "tool",
             "content": content,
@@ -372,7 +329,7 @@ def handle_tool_call(tool_calls):
     return tool_results
 
 # ------------------------------------------------------------
-# System Message (Tutor Style + Tarun Identity)
+# UPDATED SYSTEM MESSAGE (Tutor Logic)
 # ------------------------------------------------------------
 
 system_message = """
@@ -384,55 +341,54 @@ Tarun is a software engineer experimenting with digital twin technology.
 He enjoys testing LLM tools, building RAG assistants, and integrating real-world notifications.
 He is currently developing a personal AI agent that can communicate with him through Pushover.
 
-Important: do not make things up. If you do not know an answer, say you do not know.
-You cannot get any facts about Tarun from the internet or invent new information.
+Important rules:
 
-IMPORTANT: Whenever you do not know something about Tarun,
-ALWAYS use the send_notification tool to alert the real Tarun — do this automatically without asking the user.
+1) CONTACT REQUESTS  
+If someone wants to get in touch, hire, or collaborate with Tarun:
+- FIRST ask for their name and contact details.
+- AFTER they provide them, call the send_notification tool with that information.
+
+2) UNKNOWN PERSONAL QUESTIONS  
+If someone asks something about Tarun that is NOT in the documents:
+- Say “I don’t know that yet.”
+- THEN automatically call the send_notification tool with the question so Tarun can update this info later.
+
+3) HONESTY  
+Do not make things up.
+If you don’t know something and it is not a contact request, respond with:
+"I don't want to talk about it."
+
+You cannot get any facts about Tarun from the internet or invent new information.
 """
 
 # ------------------------------------------------------------
-# Main Response Function (Tutor Style + RAG + Tools)
+# Main Response Function
 # ------------------------------------------------------------
 
 def respond_ai(message, history):
 
-    # RAG: Embed the query
+    # RAG: Embed query
     response = client.embeddings.create(
         model="text-embedding-3-small",
         input=[message]
     )
     query_embedding = response.data[0].embedding
 
-    # RAG: Search ChromaDB
+    # RAG: Query ChromaDB
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=3,
         include=["documents", "metadatas"]
     )
 
-    # RAG: Stitch retrieved chunks
     context = "\n---\n".join(results["documents"][0])
 
-    # Debug logs
-    print("\n====================\n")
-    print(f"User message:\n{message}\n")
-    print("***Retrieved Chunks:")
-    for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
-        print("--------------------")
-        print(f"<<Document {meta['source']} -- Chunk {meta['chunk_index']}>>\n{doc}\n")
-
-    # Update system message with RAG context
     system_message_enhanced = system_message + "\n\nContext:\n" + context
 
-    # Build messages
-    messages = [
-        {"role": "system", "content": system_message_enhanced}
-    ] + history + [
+    messages = [{"role": "system", "content": system_message_enhanced}] + history + [
         {"role": "user", "content": message}
     ]
 
-    # First LLM call
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=messages,
@@ -441,10 +397,8 @@ def respond_ai(message, history):
 
     message_obj = response.choices[0].message
 
-    # Tool-calling loop
     while message_obj.tool_calls:
         tool_results = handle_tool_call(message_obj.tool_calls)
-
         messages.append(message_obj)
         messages.extend(tool_results)
 
@@ -459,7 +413,7 @@ def respond_ai(message, history):
     return message_obj.content
 
 # ------------------------------------------------------------
-# UI (Creative Title + Better Examples)
+# UI
 # ------------------------------------------------------------
 
 demo = gr.ChatInterface(
