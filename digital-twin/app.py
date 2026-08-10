@@ -418,9 +418,9 @@ def respond_ai(message, history):
 
 demo = gr.ChatInterface(
     fn=respond_ai,
-    title="Tarun: The AI Version of Me",
+    title="Tarun’s Digital Twin — Powered by Real Experience",
     chatbot=gr.Chatbot(avatar_images=(None, "tarun.jpeg")),
-    description="A smarter, sharper, AI-powered version of Tarun — built from his real experience.",
+    description="A curious, data‑driven AI twin trained on my actual background.",
     examples=[
         "What’s something people are usually surprised to learn about you?",
         "Tell me about a moment in your career that genuinely changed how you think.",
